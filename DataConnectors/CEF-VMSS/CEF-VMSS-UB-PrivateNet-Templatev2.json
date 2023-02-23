@@ -91,6 +91,69 @@
                 "description": "Specifies the SSH rsa public key file as a string. Use \"ssh-keygen -t rsa -b 2048\" to generate your SSH key pairs."
             }
         },
+        "CreateSecondAdminUser": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Indicates the second user should be created."
+            }
+        },
+        "SecondAdminUserName": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "The username for the second administrative user."
+            }
+        },
+        "SecondAdminPublicKey": {
+            "type": "securestring",
+            "defaultValue": "",
+            "metadata": {
+                "description": "The password for the second administrative user."
+            }
+        },
+        "CreateThirdAdminUser": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Indicates the third user should be created."
+            }
+        },
+        "ThirdAdminUserName": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "The username for the third administrative user."
+            }
+        },
+        "ThirdAdminPublicKey": {
+            "type": "securestring",
+            "defaultValue": "",
+            "metadata": {
+                "description": "The password for the third administrative user."
+            }
+        },
+        "CreateFourthAdminUser": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Indicates the fourth user should be created."
+            }
+        },
+        "FourthAdminUserName": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "The username for the fourth administrative user."
+            }
+        },
+        "FourthAdminPublicKey": {
+            "type": "securestring",
+            "defaultValue": "",
+            "metadata": {
+                "description": "The public key for the fourth administrative user."
+            }
+        },
         "WorkspaceResourceId": {
             "type": "string",
             "defaultValue": "",
@@ -142,12 +205,11 @@
         "LoadBalancerTier": {
             "type": "string",
             "allowedValues": [
-                "Gateway",
                 "Standard"
             ],
-            "defaultValue": "Gateway",
+            "defaultValue": "Standard",
             "metadata": {
-                "description": "The load balancer tier to use. If 'Gateway' is chosen, the load balancer will only be accessible internally."
+                "description": "The load balancer tier to use."
             }
         },
         "LoadBalancerFrontendIPIsStatic": {
@@ -164,11 +226,81 @@
                 "description": "When the frontend load balancer is available internally and a private static IP address should be used, indicates the private static IP address to use."
             }
         },
+        "HybridUseBenefit": {
+            "type": "bool",
+            "defaultValue": false,
+            "metadata": {
+                "description": "Indicates the VMSS should leverage the Hybrid Use Benefit for Linux."
+            }
+        },
+        "RHELHybridUseUsername": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "The username to use with the RHEL subscription manager command if the Hybrid Use Benefit should be used."
+            }
+        },
+        "RHELHybridUsePassword": {
+            "type": "securestring",
+            "defaultValue": "",
+            "metadata": {
+                "description": "The password to use with the RHEL subscription manager command if the Hybrid Use Benefit should be used."
+            }
+        },
+        "DeployPublicIP": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Controls whether the Public IP for the Load Balancer (when External) should be deployed."
+            }
+        },
+        "DeployLoadBalancer": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Controls whether the Load Balancer should be deployed."
+            }
+        },
         "DeployLoadBalancerDiagnostics": {
             "type": "bool",
             "defaultValue": false,
             "metadata": {
                 "description": "Indicates whether to create a diagnostics setting for the Load Balancer. Requires the Resource ID of a Log Analytics Workspace to work."
+            }
+        },
+        "DeployVMSS": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Controls whether the VM Scale Set should be deployed."
+            }
+        },
+        "DeployCSExtension": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Controls whether the Custom Script Extension should be deployed."
+            }
+        },
+        "DeployVMSSAutoScaleSettings": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Controls whether the VM Scale Set Auto Scale Settings should be deployed."
+            }
+        },
+        "DeployMaintenanceConfiguration": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Controls whether the Maintenance Configuration should be deployed."
+            }
+        },
+        "DeployMaintenanceConfigurationAssignment": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Controls whether the Maintenance Configuration Assignment should be deployed."
             }
         }
     },
@@ -177,6 +309,9 @@
         "baseSequenceNumberFormatted": "[format('{0:00}', parameters('BaseSequenceNumber'))]",
         "vmssName": "[concat(parameters('DeploymentEnvironment'),'-VMSS-',parameters('BaseName'),'-',variables('baseSequenceNumberFormatted'))]",
         "vmssExtensionAppHealthNameBase": "VMSS-AppHealth",
+        "vmssExtensionCSENameBase": "VMSS-CS",
+        "vmssExtensionCSEName": "[concat(variables('vmssName'),'/',variables('vmssExtensionCSENameBase'))]",
+        "maintenanceConfigurationName": "[concat(parameters('DeploymentEnvironment'),'-MCFG-',parameters('BaseName'),'-',variables('baseSequenceNumberFormatted'))]",
         "isRHEL": "[bool(if(contains(parameters('OSImage'),'RHEL'),'true','false'))]",
         "ubuntuServer2004LTSImageSKU": {
             "publisher": "Canonical",
@@ -201,8 +336,10 @@
         "lbDiagnosticsName": "[concat(variables('lbName'),'-Diagnostics-01')]",
         "lbFrontendConfigurationName": "[concat(parameters('BaseName'),'-LB','-FrontEndConfig','-01')]",
         "lbCEFProbeResourceId": "[concat(resourceId('Microsoft.Network/loadBalancers',variables('lbName')),'/probes/',variables('lbProbeName'))]",
-        "cloudInitString": "[concat('#cloud-config\nruncmd:\n  - while ( ! (find /var/log/azure/Microsoft.EnterpriseCloud.Monitoring.OmsAgentForLinux/extension.log | xargs grep \"Enable,success,0,Enable succeeded\")); do sleep 5; done\n  - sudo apt update && sudo apt upgrade\n  - sudo apt install python-is-python3\n  - apt install net-tools\n  - sudo echo \"root         soft    nofile         65536\" >> /etc/security/limits.conf\n  - sudo echo \"root         hard    nofile         65536\" >> /etc/security/limits.conf\n  - sudo echo \"*         soft    nofile         65536\" >> /etc/security/limits.conf\n  - sudo echo \"*         hard    nofile         65536\" >> /etc/security/limits.conf\n  - sudo wget https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF-VMSS/security-config-omsagent.conf -O /etc/rsyslog.d/security-config-omsagent.conf\n  - sudo wget https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_installer.py&&sudo python cef_installer.py ', parameters('workspaceId'), ' ', parameters('workspaceKey'), '\n  - sudo sed -i -e ''s@*.*;auth,authpriv.none@syslog.*;auth,authpriv.none@g'' /etc/rsyslog.d/50-default.conf\n  - sudo sed -i -e ''s@input(type=\"imudp\" port=\"514\")@input(type=\"imudp\" port=\"514\" ruleset=\"forwarddata\")@g'' /etc/rsyslog.conf\n  - sudo sed -i -e ''s@input(type=\"imtcp\" port=\"514\")@input(type=\"imtcp\" port=\"514\" ruleset=\"forwarddata\")@g'' /etc/rsyslog.conf\n  - sudo systemctl restart rsyslog\n  - sudo /opt/microsoft/omsagent/bin/service_control stop ', parameters('workspaceId'), '\n  - sudo /opt/microsoft/omsagent/bin/service_control start ', parameters('workspaceId'))]",
+        "cloudInitString": "[concat('#cloud-config\nruncmd:\n  - while ( ! (find /var/log/azure/Microsoft.EnterpriseCloud.Monitoring.OmsAgentForLinux/extension.log | xargs grep \"Enable,success,0,Enable succeeded\")); do sleep 5; done\n  - sudo apt update && sudo apt upgrade\n  - sudo apt install python-is-python3\n  - apt install net-tools\n  - sudo echo \"root         soft    nofile         65536\" >> /etc/security/limits.conf\n  - sudo echo \"root         hard    nofile         65536\" >> /etc/security/limits.conf\n  - sudo echo \"*         soft    nofile         65536\" >> /etc/security/limits.conf\n  - sudo echo \"*         hard    nofile         65536\" >> /etc/security/limits.conf\n  - sudo wget https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_installer.py&&sudo python cef_installer.py ', parameters('workspaceId'), ' ', parameters('workspaceKey'), '\n  - sudo wget https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF-VMSS/security-config-omsagent.conf -O ->> /etc/rsyslog.d/security-config-omsagent.conf\n  - sudo sed -i -e ''s@*.*;auth,authpriv.none@syslog.*;auth,authpriv.none@g'' /etc/rsyslog.d/50-default.conf\n  - sudo sed -i -e ''s@input(type=\"imudp\" port=\"514\")@input(type=\"imudp\" port=\"514\" ruleset=\"forwarddata\")@g'' /etc/rsyslog.conf\n  - sudo sed -i -e ''s@input(type=\"imtcp\" port=\"514\")@input(type=\"imtcp\" port=\"514\" ruleset=\"forwarddata\")@g'' /etc/rsyslog.conf\n  - sudo systemctl restart rsyslog\n  - sudo /opt/microsoft/omsagent/bin/service_control stop ', parameters('workspaceId'), '\n  - sudo /opt/microsoft/omsagent/bin/service_control start ', parameters('workspaceId'))]",
         "cloudinitStringBase64": "[base64(variables('cloudInitString'))]",
+        "sudoGroupName": "[if(variables('isRHEL'),'wheel','sudo')]",
+        "cseCommand": "[concat(if(parameters('CreateSecondAdminUser'),concat('sudo useradd -G ',variables('sudoGroupName'),' ',parameters('SecondAdminUserName'), '&&sudo sed -i ''s/#PubkeyAuthentication yes/PubkeyAuthentication yes/g'' /etc/ssh/sshd_config&&mkdir -p /home/',parameters('SecondAdminUserName'),'/.ssh&&echo ',parameters('SecondAdminPublicKey'),' > /home/',parameters('SecondAdminUserName'),'/.ssh/authorized_keys&&chown -R ',parameters('SecondAdminUserName'),':',parameters('SecondAdminUserName'),' /home/',parameters('SecondAdminUserName'),'/.ssh&&chmod 700 /home/',parameters('SecondAdminUserName'),'/.ssh&&chmod 600 /home/',parameters('SecondAdminUserName'),'/.ssh/authorized_keys&&systemctl restart sshd&&'),''),if(parameters('CreateThirdAdminUser'),concat('sudo useradd -G ',variables('sudoGroupName'),' ',parameters('ThirdAdminUserName'), '&&sudo sed -i ''s/#PubkeyAuthentication yes/PubkeyAuthentication yes/g'' /etc/ssh/sshd_config&&mkdir -p /home/',parameters('ThirdAdminUserName'),'/.ssh&&echo ',parameters('ThirdAdminPublicKey'),' > /home/',parameters('ThirdAdminUserName'),'/.ssh/authorized_keys&&chown -R ',parameters('ThirdAdminUserName'),':',parameters('ThirdAdminUserName'),' /home/',parameters('ThirdAdminUserName'),'/.ssh&&chmod 700 /home/',parameters('ThirdAdminUserName'),'/.ssh&&chmod 600 /home/',parameters('ThirdAdminUserName'),'/.ssh/authorized_keys&&systemctl restart sshd&&'),''),if(parameters('CreateFourthAdminUser'),concat('sudo useradd -G ',variables('sudoGroupName'),' ',parameters('FourthAdminUserName'), '&&sudo sed -i ''s/#PubkeyAuthentication yes/PubkeyAuthentication yes/g'' /etc/ssh/sshd_config&&mkdir -p /home/',parameters('FourthAdminUserName'),'/.ssh&&echo ',parameters('FourthAdminPublicKey'),' > /home/',parameters('FourthAdminUserName'),'/.ssh/authorized_keys&&chown -R ',parameters('FourthAdminUserName'),':',parameters('FourthAdminUserName'),' /home/',parameters('FourthAdminUserName'),'/.ssh&&chmod 700 /home/',parameters('FourthAdminUserName'),'/.ssh&&chmod 600 /home/',parameters('FourthAdminUserName'),'/.ssh/authorized_keys&&systemctl restart sshd&&'),''),if(and(parameters('HybridUseBenefit'),variables('isRHEL')),concat('&&subscription-manager register --username ',parameters('RHELHybridUseUsername'),' --password ',parameters('RHELHybridUsePassword'),' --auto-attach'),''),'echo CSE Command all done.')]",
         "lBSubnetResourceID": "[concat(parameters('VNetResourceID'),'/subnets/',parameters('LBSubnetName'))]",
         "lbSubnetProperty": {
             "id": "[variables('lBSubnetResourceID')]"
@@ -229,7 +366,7 @@
             "apiVersion": "2020-11-01",
             "name": "[variables('pipForLBName')]",
             "location": "[variables('deploymentRegion')]",
-            "condition": "[equals(parameters('LoadBalancerAccessibility'),'External')]",
+            "condition": "[and(equals(parameters('LoadBalancerAccessibility'),'External'),parameters('DeployPublicIP'))]",
             "sku": {
                 "name": "Standard",
                 "tier": "Regional"
@@ -248,6 +385,7 @@
             "apiVersion": "2022-01-01",
             "name": "[variables('lbName')]",
             "location": "[variables('deploymentRegion')]",
+            "condition": "[parameters('DeployLoadBalancer')]",
             "dependsOn": [
                 "[resourceId('Microsoft.Network/publicIPAddresses',variables('pipForLBName'))]"
             ],
@@ -320,7 +458,7 @@
             "apiVersion": "2017-05-01-preview",
             "name": "[concat(variables('lbName'), '/Microsoft.Insights/', variables('lbDiagnosticsName'))]",
             "location": "[variables('deploymentRegion')]",
-            "condition": "[parameters('DeployLoadBalancerDiagnostics')]",
+            "condition": "[and(parameters('DeployLoadBalancerDiagnostics'),parameters('DeployLoadBalancer'))]",
             "dependsOn": [
                 "[resourceId('Microsoft.Network/loadBalancers',variables('lbName'))]"
             ],
@@ -349,6 +487,7 @@
             "apiVersion": "2021-11-01",
             "name": "[variables('vmssName')]",
             "location": "[variables('deploymentRegion')]",
+            "condition": "[parameters('DeployVMSS')]",
             "dependsOn": [
                 "[resourceId('Microsoft.Network/loadBalancers',variables('lbName'))]"
             ],
@@ -370,6 +509,11 @@
                         "maxBatchInstancePercent": 20,
                         "maxUnhealthyInstancePercent": 20,
                         "maxUnhealthyUpgradedInstancePercent": 20
+                    },
+                    "automaticOSUpgradePolicy": {
+                        "enableAutomaticOSUpgrade": true,
+                        "useRollingUpgradePolicy": true,
+                        "disableAutomaticRollback": false
                     }
                 },
                 "virtualMachineProfile": {
@@ -481,10 +625,33 @@
             }
         },
         {
+            "type": "Microsoft.Compute/virtualMachineScaleSets/extensions",
+            "apiVersion": "2020-12-01",
+            "name": "[variables('vmssExtensionCSEName')]",
+            "location": "[resourceGroup().location]",
+            "condition": "[and(parameters('DeployVMSS'),parameters('DeployCSExtension'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Compute/virtualMachineScaleSets',variables('vmssName'))]"
+            ],
+            "properties": {
+                "publisher": "Microsoft.Azure.Extensions",
+                "type": "CustomScript",
+                "typeHandlerVersion": "2.1",
+                "autoUpgradeMinorVersion": true,
+                "protectedSettings": {
+                    "commandToExecute": "[variables('cseCommand')]"
+                },
+                "settings": {
+                    "skipDos2Unix": false
+                }
+            }
+        },
+        {
             "type": "Microsoft.Insights/autoScaleSettings",
             "apiVersion": "2015-04-01",
             "name": "[variables('autoscaleSettingName')]",
             "location": "[variables('deploymentRegion')]",
+            "condition": "[and(parameters('DeployVMSS'),parameters('DeployVMSSAutoScaleSettings'))]",
             "dependsOn": [
                 "[resourceId('Microsoft.Compute/virtualMachineScaleSets',variables('vmssName'))]"
             ],
@@ -547,6 +714,40 @@
                 "name": "[variables('autoscaleSettingName')]",
                 "targetResourceUri": "[resourceId('Microsoft.Compute/virtualMachineScaleSets',variables('vmssName'))]"
             }
+        },
+        {
+            "type": "Microsoft.Maintenance/maintenanceConfigurations",
+            "apiVersion": "2022-11-01-preview",
+            "name": "[variables('maintenanceConfigurationName')]",
+            "location": "[variables('deploymentRegion')]",
+            "condition": "[parameters('DeployMaintenanceConfiguration')]",
+            "properties": {
+                "extensionProperties": {},
+                "maintenanceScope": "OSImage",
+                "maintenanceWindow": {
+                    "startDateTime": "2023-01-01 00:00",
+                    "duration": "05:00",
+                    "timeZone": "Pacific Standard Time",
+                    "recurEvery": "1Day"
+                },
+                "visibility": "Custom"
+            }
+        },
+        {
+            "type": "Microsoft.Maintenance/configurationAssignments",
+            "apiVersion": "2021-05-01",
+            "name": "[variables('maintenanceConfigurationName')]",
+            "condition": "[parameters('DeployMaintenanceConfigurationAssignment')]",
+            "location": "[variables('deploymentRegion')]",
+            "scope": "[resourceId('Microsoft.Compute/virtualMachineScaleSets',variables('vmssName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Maintenance/maintenanceConfigurations',variables('maintenanceConfigurationName'))]",
+                "[resourceId('Microsoft.Compute/virtualMachineScaleSets',variables('vmssName'))]"
+            ],
+            "properties": {
+                "maintenanceConfigurationId": "[resourceId('Microsoft.Maintenance/maintenanceConfigurations',variables('maintenanceConfigurationName'))]",
+                "resourceId": "[resourceId('Microsoft.Compute/virtualMachineScaleSets',variables('vmssName'))]"
+            }
         }
     ],
     "outputs": {
@@ -573,6 +774,10 @@
         "VMSSAutoScaleSettingName": {
             "type": "string",
             "value": "[variables('autoscaleSettingName')]"
+        },
+        "MaintenanceConfigurationAssignmentResourceID": {
+            "type": "string",
+            "value": "[resourceId('Microsoft.Maintenance/configurationAssignments',variables('maintenanceConfigurationName'))]"
         }
     }
 }
